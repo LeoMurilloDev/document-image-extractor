@@ -1,124 +1,192 @@
+# Librerias Necesarias para Direcciones de archivos y creacion de Zip
 import os
 import shutil
-from docx import Document
-import fitz  # PyMuPDF
-from PIL import Image
 import zipfile
 import hashlib
+from pathlib import Path
+from docx import Document # Libreria para manejo de documentos Word
+import fitz # Libreria para manejo de documentos PDF
 
 
-
-CARPETA_ENTRADA = "Entradas_archivos"
-CARPETA_SALIDAS = "Salidas_archivos"
-CARPETA_TEM = "temp"
+# Configuracion De Carpetas de Entrada y Salida de los documentos Ademas de configuracion de parametros adicionales
+CARPETA_ENTRADA = Path("Entradas_archivos")
+CARPETA_SALIDAS = Path("Salidas_archivos")
+CARPETA_TEMP = Path("temp")
+MIN_KB_DEFAULT = 5
 
 def crear_carpetas():
-    """Crear la carpeta necesaria si no existe"""
+    # Creacion de carpetas en caso de que estas no existan
     os.makedirs(CARPETA_ENTRADA, exist_ok=True)
     os.makedirs(CARPETA_SALIDAS, exist_ok=True)
-    os.makedirs(CARPETA_TEM, exist_ok=True)
+    os.makedirs(CARPETA_TEMP, exist_ok=True)
 
-def calcular_hash_imagen(ruta_imagen):
-    """Calcular el hash de una imagen"""
-    with open(ruta_imagen, "rb") as f:
-        return hashlib.md5(f.read()).hexdigest()
+def calcular_md5(data: bytes) -> str:
+    # Calcular el hash MD5 de los datos proporcionados
+    return hashlib.md5(data).hexdigest()
 
-def es_imagen_valida(ruta_imagen, min_kb=5, hashes_existentes=None):
-    """Verificar si una imagen es válida (no vacía y no muy pequeña)"""
-    if hashes_existentes is None:
-        hashes_existentes = set()
+def es_muy_pequena(ruta: Path, min_kb: int) -> bool:
+    # Verifica si el archivo en la ruta dada es menor que el tamaño minimo en KB
+    return (ruta.stat().st_size / 1024) < min_kb
 
-    tamano = os.path.getsize(ruta_imagen) / 1024
-    if tamano < min_kb:
-        return False
+def crear_zip(carpeta_origen: Path, zip_destino: Path) -> None:
+    # Crear un zip con el contenido de carpeta_origen
+    with zipfile.ZipFile(zip_destino, 'w', compression=zipfile.ZIP_DEFLATED) as zf:
+        for archivo in carpeta_origen.rglob('*'):
+            if archivo.is_file(): 
+                zf.write(archivo, arcname=archivo.relative_to(carpeta_origen))
+
+def limpiar_carpeta(carpeta: Path) -> None:
+    # EliminarArchivos de la carpeta especificada
+    if carpeta.exists(): 
+        shutil.rmtree(carpeta, ignore_errors=True)
+
+def normalizar_extension(ext: str)-> str:
+    # Normalizacion de extenciones para imagenes
+    ext = ext.lower().strip(".")
+    if ext in ("jpeg", "jpe"):
+        return "jpg"
+    if ext == "tif":
+        return "tiff"
+    return ext
+
+def obtener_extension_docx(image_part) -> str: 
+    # Deduccion de la extencion de la imagenes en documentos .docx
+    ct = getattr(image_part, "content_type", None)
+    if ct and "/" in ct:
+        guessed = ct.split("/")[-1]
+        guessed = normalizar_extension(guessed)
+        return guessed
     
-    imagen_hash = calcular_hash_imagen(ruta_imagen)
-    if imagen_hash in hashes_existentes:
-        return False
+    partname = str(getattr(image_part, "partname", "")).lower()
+    if "." in partname:
+        guessed = partname.split(".")[-1]
+        guessed = normalizar_extension(guessed)
+        return guessed
+    return "bin"
+
+
+# Extractores
+def extraer_imagenes_word(docx_path: Path, carpeta_temp_archivo: Path, min_kb:int) -> dict:
+    # Extraer las imagenes que vienen en el documento docx
+    stats = {"encontradas": 0, "guardadas": 0, "duplicadas": 0, "pequenas": 0}
+    doc = Document(str(docx_path))
+    hashes = set()
+
+    image_parts = list(doc.part.package.image_parts)
+    stats["encontradas"] = len(image_parts)
+
+    for i, image_part in enumerate(image_parts, start=1):
+        blob = image_part.blob
+        md5 = calcular_md5(blob)
+        if md5 in hashes:
+            stats["duplicadas"] += 1
+            continue
+        ext = obtener_extension_docx(image_part)
+        nombre = f"image_{i:03d}.{ext}"
+        ruta_salida = carpeta_temp_archivo / nombre
+        ruta_salida.write_bytes(blob)
+
+        if es_muy_pequena(ruta_salida, min_kb):
+            stats["pequenas"] += 1
+            ruta_salida.unlink(missing_ok=True)
+            continue
+        hashes.add(md5)
+        stats["guardadas"] += 1
+    return stats
+
+def extraer_imagenes_pdf(pdf_path: Path, carpeta_temp_archivo: Path, min_kb: int) -> dict:
+    # Extraer las imagenes que vienen en el documento pdf
+    stats = {"encontradas": 0, "guardadas": 0, "duplicadas": 0, "pequenas": 0}
+    hashes = set()
+    contador = 0
+
+    with fitz.open(str(pdf_path)) as pdf:
+        for page_index in range(len(pdf)):
+            page = pdf[page_index]
+            for img in page.get_images(full=True):
+                xref = img[0]
+                base_image = pdf.extract_image(xref)
+                image_bytes = base_image.get("image", b"")
+                ext = normalizar_extension(base_image.get("ext", "bin"))
+
+                stats['encontradas'] += 1
+
+                md5 = calcular_md5(image_bytes)
+                if md5 in hashes:
+                    stats["duplicadas"] += 1
+                    continue
+
+                contador += 1
+                nombre = f"image_{contador:03d}_p{page_index+1:03d}.{ext}"
+                ruta_salida = carpeta_temp_archivo / nombre
+                ruta_salida.write_bytes(image_bytes)
+
+                if es_muy_pequena(ruta_salida, min_kb):
+                    stats["pequenas"] += 1
+                    ruta_salida.unlink(missing_ok=True)
+                    continue
+
+                hashes.add(md5)
+                stats['guardadas'] += 1
+    return stats
+
+def procesar_archivo(ruta_archivo: Path, min_kb: int = MIN_KB_DEFAULT) -> None:
+    # Procesa un archivo infiviual donde se valida la extencion del archivo para su debido proceso interno
+    nombre_base = ruta_archivo.stem
+    carpeta_temp_archivo = CARPETA_TEMP / nombre_base
+
+    # Se limpia la carpeta en caso de una version de la carpeta previa
+    limpiar_carpeta(carpeta_temp_archivo)
+    carpeta_temp_archivo.mkdir(parents=True, exist_ok=True)
+
+
+    # Validacion de la extencion del archivo
+    try:
+        ext = ruta_archivo.suffix.lower()
+        if ext == '.pdf':
+            stats = extraer_imagenes_pdf(ruta_archivo, carpeta_temp_archivo, min_kb)
+        elif ext == '.docx':
+            stats = extraer_imagenes_word(ruta_archivo, carpeta_temp_archivo, min_kb)
+        else: 
+            print(f"WARNING {ruta_archivo.name}: Extencion no soportada ({ext})")
+            return
+        
+        if stats["guardadas"] > 0:
+            zip_path = CARPETA_SALIDAS / f"{nombre_base}.zip"
+            crear_zip(carpeta_temp_archivo,zip_path)
+            print(
+                f"SUCCESS {ruta_archivo.name}: guardadas = {stats['guardadas']}, "
+                f"Duplicadas = {stats['duplicadas']}, "
+                f"Pequeñas = {stats['pequenas']}, "
+                f"Encontradas = {stats['encontradas']} ")
+        else: 
+            print(
+                f"WARNING  {ruta_archivo.name}: No hay imagenes validas, "
+                f"(encontradas = {stats['encontradas']}, duplicadas = {stats['duplicadas']}, pequeñas = {stats['pequenas']})")
+    except Exception as e: 
+        print(f"ERROR Error procesando la ruta {ruta_archivo.name}: {e}")
+    finally: 
+        limpiar_carpeta(carpeta_temp_archivo)
+
+
+def main(): 
+    # Verificacion de que las carpetas definidas en la ruta existan
+    crear_carpetas()
+
+    #Listado de documentos inicializacion
+    archivos = []
+
+    if CARPETA_ENTRADA.exists():
+        for f in CARPETA_ENTRADA.iterdir():
+            if f.is_file() and f.suffix.lower() in (".pdf", ".docx"):
+                archivos.append(f)
     
-    hashes_existentes.add(imagen_hash)
-    return True
-
-
-
-def extraer_imagenes_word(archivo_docx, carpeta_destino):
-    """Extraer imagenes de un archivo word (.docx)"""
-    doc = Document(archivo_docx)
-    hashes_existentes = set()
-    contador = 0
-    for i, rel in  enumerate(doc.part.rels.values()):
-        if "image" in rel.target_ref:
-            img_data = rel.target_part.blob
-            ruta_temp = os.path.join(carpeta_destino, f"temp_{i}.png")
-            
-            with open(ruta_temp, "wb") as f:
-                f.write(img_data)
-            
-            if es_imagen_valida(ruta_temp, min_kb=5, hashes_existentes=hashes_existentes):
-                ruta_final = os.path.join(carpeta_destino, f"imagen_{contador}.png")
-                os.rename(ruta_temp, ruta_final)
-                contador += 1
-            else:
-                os.remove(ruta_temp)
-
-def extraer_imagenes_pdf(archivo_pdf, carpeta_destino):
-    """Extraer imagenes de un archivo pdf (.pdf)"""
-    pdf = fitz.open(archivo_pdf)
-    hashes_existentes = set()
-    contador = 0
-
-    for i, pagina in enumerate(pdf):
-        for j, img in enumerate(pagina.get_images()):
-            xref = img[0]
-            base_img = pdf.extract_image(xref)
-            img_data = base_img["image"]
-            extension = base_img["ext"]
-            ruta_temp = os.path.join(carpeta_destino, f"temp_pdf_{i}_{j}.{extension}")
-            
-            with open(ruta_temp, "wb") as f:
-                f.write(img_data)
-            
-            if es_imagen_valida(ruta_temp, min_kb=5, hashes_existentes=hashes_existentes):
-                ruta_final = os.path.join(carpeta_destino, f"imagen_pdf_{contador}.{extension}")
-                os.rename(ruta_temp, ruta_final)
-                contador += 1
-            else:
-                os.remove(ruta_temp)
-
-def crear_rar(carpeta_imagenes, nombre_archivo):
-    """Crear un archivo rar con las imagenes de la carpeta"""
-    nombre_zip = os.path.join(CARPETA_SALIDAS, f"{nombre_archivo}.zip")
-    with zipfile.ZipFile(nombre_zip, "w") as zf:
-        for img in os.listdir(carpeta_imagenes):
-            img_path = os.path.join(carpeta_imagenes, img)
-            zf.write(img_path, img)
-
-def procesar_archivos():
-    """Procesar los archivos de la carpeta de entrada"""
-    for archivo in os.listdir(CARPETA_ENTRADA):
-        nombre, extencion = os.path.splitext(archivo)
-        carpeta_temp = os.path.join(CARPETA_TEM, nombre)
-        os.makedirs(carpeta_temp, exist_ok=True)
-
-        archivo_completo = os.path.join(CARPETA_ENTRADA, archivo)
-
-        try:
-            if extencion.lower() == ".docx":
-                extraer_imagenes_word(archivo_completo, carpeta_temp)
-            elif extencion.lower() == ".pdf":
-                extraer_imagenes_pdf(archivo_completo, carpeta_temp)
-
-            if os.listdir(carpeta_temp):
-                crear_rar(carpeta_temp, nombre)
-                print(f"✔ {archivo}: Imágenes extraídas y comprimidas.")
-            else:
-                print(f"⚠ {archivo}: No contiene imágenes.")
-
-            shutil.rmtree(carpeta_temp)
-        except Exception as e:
-            print(f"❌ Error procesando {archivo}: {e}")
+    if not archivos:
+        print(f"WARNING: No se encontraron archivos .pdf o .docx en {CARPETA_ENTRADA.resolve()}")
+        return
+    
+    for archivo in archivos:
+        procesar_archivo(archivo, min_kb=MIN_KB_DEFAULT)
 
 if __name__ == "__main__":
-    crear_carpetas()
-    procesar_archivos()
-    print("✅ Proceso completado.")
+    main()
