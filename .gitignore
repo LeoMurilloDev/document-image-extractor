@@ -1,2 +1,5 @@
 # Evitar subir archivos .zip
 /Salidas_archivos/*.zip
+
+# Environment
+.venv/
