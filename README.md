@@ -64,6 +64,22 @@ the script creates these folders automatically if they don't exist:
 - **Salidas_archivos/** -> output ZIPs will be generated here
 - **temp/** -> temporary extraction folder (auto-cleaned)
 
+### Configuration 
+You can customize filters without editing the code using `config.json` (repo root).
+Example: 
+```json
+{
+  "filters": {
+    "min_kb": 5,
+    "min_width": 0,
+    "min_height": 0
+  }
+}
+```
+- `min_kb`: minimum file size in kb (default: 5)
+- `min_width`/ `min_height`: optional dimension filter (0 disables it)
+
+
 ## Run 
 ```bash
 python main.py

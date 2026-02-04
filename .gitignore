@@ -3,3 +3,6 @@
 
 # Environment
 .venv/
+
+# Configuracion
+config.json
