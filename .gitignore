@@ -6,3 +6,6 @@
 
 # Configuracion
 config.json
+
+# Cache
+__pycache__/
