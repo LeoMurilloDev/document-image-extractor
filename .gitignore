@@ -9,3 +9,7 @@ config.json
 
 # Cache
 __pycache__/
+
+# Logs
+logs/
+*.log

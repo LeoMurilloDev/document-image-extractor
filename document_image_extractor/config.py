@@ -15,6 +15,12 @@ DEFAULT_CONFIG: Dict[str, Any] = {
     },
     "dedup": {"enabled": True},
     "output": {"format": "zip"},
+    "logging": {
+        "level": "INFO",
+        "log_file": "logs/run.log",
+        "format": "%(asctime)s | %(levelname)s | %(message)s",
+        "datefmt": "%Y-%m-%d %H:%M:%S"
+    }
 }
 
 # Cargar la configuracion del programa y parametros basicos
@@ -28,7 +34,7 @@ def load_config(config_path: Path = Path("config.json")) -> Dict[str, Any]:
     except Exception:
         return cfg
     
-    for section in ("paths", "filters", "dedup", "output"):
+    for section in ("paths", "filters", "dedup", "output", "logging"):
         if isinstance(user_cfg.get(section), dict): cfg[section].update(user_cfg[section])
     
     # Normalizacion minima
@@ -37,5 +43,12 @@ def load_config(config_path: Path = Path("config.json")) -> Dict[str, Any]:
     cfg["filters"]["min_height"] = int(cfg["filters"].get("min_height", 0))
     cfg["dedup"]["enabled"] = bool(cfg["dedup"].get("enabled", True))
     cfg["output"]["format"] = str(cfg["output"].get("format", "zip")).lower()
+    cfg["logging"]["level"] = str(cfg["logging"].get("level", "INFO")).upper()
+    cfg["logging"]["format"] = str(cfg["logging"].get("format", DEFAULT_CONFIG["logging"]["format"]))
+    cfg["logging"]["datefmt"] = str(cfg["logging"].get("datefmt", DEFAULT_CONFIG["logging"]["datefmt"]))
+    log_file = str(cfg["logging"].get("log_file", "")).strip()
+    if not log_file:
+        log_file = DEFAULT_CONFIG["logging"]["log_file"]
+    cfg["logging"]["log_file"] = log_file
 
     return cfg
