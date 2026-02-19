@@ -9,10 +9,12 @@
         "min_width": 0,
         "min_height": 0
     },
-    "dedup": {
-        "enabled": true
-    },
-    "output": {
-        "format": "zip"
+    "dedup": {"enabled": true},
+    "output": {"format": "zip"},
+    "logging": {
+        "level": "INFO",
+        "log_file": "logs/run.log",
+        "format": "%(asctime)s | %(levelname)s | %(message)s",
+        "datefmt": "%Y-%m-%d %H:%M:%S"
     }
 }
