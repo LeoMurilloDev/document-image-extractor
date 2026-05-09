@@ -2,9 +2,11 @@ from pathlib import Path
 from typing import Any, Dict, List
 from .extractors.docx_extractor import extract_docx_images
 from .extractors.pdf_extractor import extract_pdf_images
+from .extractors.pptx_extractor import extract_pptx_images
+from .extractors.xlsx_extractor import extract_xlsx_images
 from .utils.files import clean_dir, ensure_dir, create_zip_from_folder
 
-SUPPORTED_EXTS = {".pdf", ".docx"}
+SUPPORTED_EXTS = {".pdf", ".docx", ".pptx", ".xlsx"}
 
 def process_file(file_path: Path, cfg: Dict[str, Any]) -> Dict:
     paths = cfg["paths"]
@@ -28,6 +30,10 @@ def process_file(file_path: Path, cfg: Dict[str, Any]) -> Dict:
             stats = extract_pdf_images(file_path, temp_folder, cfg)
         elif ext == ".docx":
             stats = extract_docx_images(file_path, temp_folder, cfg)
+        elif ext == ".pptx":
+            stats = extract_pptx_images(file_path, temp_folder, cfg)
+        elif ext == ".xlsx":
+            stats = extract_xlsx_images(file_path, temp_folder, cfg)
         else: 
             return {"skipped": True, "reason": f"extencion no soportada ({ext})"}
         

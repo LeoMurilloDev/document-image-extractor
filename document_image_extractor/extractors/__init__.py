@@ -1,1 +1,1 @@
-__all__ = ["docx_extractor", "pdf_extractor"]
+__all__ = ["docx_extractor", "pdf_extractor","pptx_extractor","xlsx_extractor","ooxml_media_extractor"]
