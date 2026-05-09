@@ -4,7 +4,7 @@ from .extractors.docx_extractor import extract_docx_images
 from .extractors.pdf_extractor import extract_pdf_images
 from .extractors.pptx_extractor import extract_pptx_images
 from .extractors.xlsx_extractor import extract_xlsx_images
-from .utils.files import clean_dir, ensure_dir, create_zip_from_folder
+from .utils.files import clean_dir, ensure_dir, create_zip_from_folder, copy_folder
 
 SUPPORTED_EXTS = {".pdf", ".docx", ".pptx", ".xlsx"}
 
@@ -37,18 +37,38 @@ def process_file(file_path: Path, cfg: Dict[str, Any]) -> Dict:
         else: 
             return {"skipped": True, "reason": f"extencion no soportada ({ext})"}
         
-        if stats["saved"] > 0 and output_format == "zip":
-            zip_path = output_dir / f"{name}.zip"
-            create_zip_from_folder(temp_folder, zip_path)
-        
+        if stats["saved"] > 0:
+            if output_format == "zip":
+                zip_path = output_dir / f"{name}.zip"
+                create_zip_from_folder(temp_folder, zip_path)
+
+            elif output_format == "folder":
+                folder_path = output_dir / name
+                copy_folder(temp_folder, folder_path)
+
+            else:
+                return {"error": f"formato de salida no soportado: {output_format}"}
+
         return stats
     except Exception as e:
         return {"error": str(e)}
     finally:
         clean_dir(temp_folder)
 
-def list_input_files(input_dir: Path) -> List[Path]:
-    return [
-        f for f in input_dir.iterdir()
+def list_input_files(input_path: Path, recursive: bool = False) -> List[Path]:
+    if input_path.is_file():
+        if input_path.suffix.lower() in SUPPORTED_EXTS:
+            return [input_path]
+        return []
+
+    if not input_path.is_dir():
+        return []
+
+    pattern = "**/*" if recursive else "*"
+
+    files = [
+        f for f in input_path.glob(pattern)
         if f.is_file() and f.suffix.lower() in SUPPORTED_EXTS
     ]
+
+    return sorted(files)

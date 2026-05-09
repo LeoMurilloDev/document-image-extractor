@@ -86,6 +86,27 @@ Example:
 python main.py
 ```
 
+## CLI usage
+The tool can be used with default folders/config:
+
+```bash
+python main.py
+
+python main.py --input Entradas_archivos --output Salidas_archivos
+
+python main.py --input example.pptx --output Salidas_archivos
+
+python main.py --input Entradas_archivos --recursive
+
+python main.py --input Entradas_archivos --min-kb 1 --min-width 100 --min-height 100
+
+python main.py --input Entradas_archivos --no-dedup
+
+python main.py --input Entradas_archivos --format folder
+
+python main.py --input Entradas_archivos --log-level DEBUG --log-file logs/debug.log
+```
+
 ## Output
 - For each input file, a ZIP is created in **Salidas_archivos/**
 - Example: 
