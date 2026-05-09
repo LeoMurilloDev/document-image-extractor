@@ -1,7 +1,6 @@
 # Document-Image-Extractor
 
-CLI tool to extract embedded images from **DOCX** and **PDF** files, with deduplication , size filtering, and batch export to ZIPs.
-Roadmap: add support for **PPTX** and **XLSX**.
+CLI tool to extract embedded images from **DOCX**, **PDF**, **PPTX** and **XLSX** files, with deduplication , size filtering, and batch export to ZIPs.
 
 ---
 
@@ -9,6 +8,8 @@ Roadmap: add support for **PPTX** and **XLSX**.
 Extract images from: 
 - DOCX (Word documents)
 - PDF (documents)
+- PPTX (Powerpoint documents)
+- XLSX (Excel documents)
 
 Outputs:
 - Creates a **ZIP per input file** with extracted images
