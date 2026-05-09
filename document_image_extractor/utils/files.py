@@ -18,3 +18,10 @@ def create_zip_from_folder(folder: Path, zip_destine: Path) -> None:
 def is_small_kb(path: Path, min_kb: int) -> bool:
     # Validacion booleana si la imagen es mas chica que el parametro min_kb configurado
     return (path.stat().st_size / 1024) < min_kb
+
+def copy_folder(src: Path, dest: Path) -> None:
+    # Copia una carpeta al destino, si el destino existe lo remplaza
+    if dest.exists(): shutil.rmtree(dest, ignore_errors=True)
+
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copytree(src, dest)
