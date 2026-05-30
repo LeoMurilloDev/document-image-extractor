@@ -9,13 +9,24 @@ config.json
 
 # Cache
 __pycache__/
+*.py[cod]
+*$py.class
 
 # Logs
 logs/
 *.log
+
+# Temporales
+temp/
+Salidas_archivos/
 
 #Tests
 .pytest_tmp/
 .pytest_cache/
 .coverage
 htmlcov/
+
+# Compilaciones
+dist/
+build/
+*.egg-info/
